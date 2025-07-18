@@ -19,8 +19,7 @@ contract MockERC20 is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
 
     /**
-     * @dev 铸造新代币并将其分配到指定地址。
-     * 此函数为方便测试而设置为公共。
+     * @dev 铸造新代币并将其分配到指定地址。此函数为方便测试而设置为公共。
      * @param to 接收代币的地址。
      * @param amount 铸造的代币数量。
      */
@@ -28,4 +27,3 @@ contract MockERC20 is ERC20 {
         _mint(to, amount);
     }
 }
-

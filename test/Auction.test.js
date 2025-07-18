@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: MIT
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
@@ -45,7 +44,7 @@ describe("Auction Contract", function () {
             priceFeed.getAddress(),
             100
         );
-        await myNFT.connect(seller).safeTransferFrom(seller.address, auctionImpl.getAddress(), tokenId); // 修复失败 1, 2, 3
+        await myNFT.connect(seller).safeTransferFrom(seller.address, auctionImpl.getAddress(), tokenId);
         auction = auctionImpl;
     });
 
@@ -70,7 +69,7 @@ describe("Auction Contract", function () {
         it("卖家出价应失败", async function () {
             await expect(
                 auction.connect(seller).bidETH({ value: ethers.parseEther("1") })
-            ).to.be.revertedWith("卖家不能出价"); // 覆盖行 145
+            ).to.be.revertedWith("卖家不能出价");
             await expect(
                 auction.connect(seller).bidERC20(ethers.parseEther("1"))
             ).to.be.revertedWith("卖家不能出价");
@@ -96,7 +95,7 @@ describe("Auction Contract", function () {
             await erc20Token.connect(bidder1).approve(auction.getAddress(), 0);
             await expect(
                 auction.connect(bidder1).bidERC20(ethers.parseEther("1"))
-            ).to.be.revertedWithCustomError(erc20Token, "ERC20InsufficientAllowance"); // 修复错误 3
+            ).to.be.revertedWithCustomError(erc20Token, "ERC20InsufficientAllowance");
         });
 
         it("ERC20 出价余额不足应失败", async function () {
@@ -104,7 +103,7 @@ describe("Auction Contract", function () {
             await erc20Token.connect(bidder1).transfer(owner.address, ethers.parseEther("1000"));
             await expect(
                 auction.connect(bidder1).bidERC20(ethers.parseEther("2"))
-            ).to.be.revertedWithCustomError(erc20Token, "ERC20InsufficientBalance"); // 修复错误 4
+            ).to.be.revertedWithCustomError(erc20Token, "ERC20InsufficientBalance");
         });
 
         it("被超出的出价者应收到退款 (ETH 后 ERC20)", async function () {
@@ -112,14 +111,56 @@ describe("Auction Contract", function () {
             await auction.connect(bidder1).bidETH({ value: ethers.parseEther("1") });
             await auction.connect(bidder2).bidERC20(ethers.parseEther("2"));
             const bidder1FinalBalance = await ethers.provider.getBalance(bidder1.address);
-            expect(bidder1FinalBalance).to.be.closeTo(bidder1InitialBalance, ethers.parseEther("0.01")); // 覆盖行 151
+            expect(bidder1FinalBalance).to.be.closeTo(bidder1InitialBalance, ethers.parseEther("0.01"));
         });
 
         it("被超出的出价者应收到退款 (ERC20 后 ETH)", async function () {
             const bidder1InitialBalance = await erc20Token.balanceOf(bidder1.address);
             await auction.connect(bidder1).bidERC20(ethers.parseEther("1"));
             await auction.connect(bidder2).bidETH({ value: ethers.parseEther("2") });
-            expect(await erc20Token.balanceOf(bidder1.address)).to.equal(bidder1InitialBalance); // 覆盖行 148, 149
+            const bidder1FinalBalance = await erc20Token.balanceOf(bidder1.address);
+            expect(bidder1FinalBalance).to.equal(bidder1InitialBalance);
+        });
+
+        it("无效初始化 duration 应失败", async function () {
+            const newAuction = await Auction.deploy();
+            await newAuction.waitForDeployment();
+            const tokenId = await myNFT.connect(owner).mint.staticCall(seller.address, "ipfs://test/new");
+            await myNFT.connect(owner).mint(seller.address, "ipfs://test/new");
+            await myNFT.connect(seller).approve(newAuction.getAddress(), tokenId);
+            await expect(
+                newAuction.initialize(
+                    myNFT.getAddress(),
+                    tokenId,
+                    seller.address,
+                    0,
+                    erc20Token.getAddress(),
+                    priceFeed.getAddress(),
+                    100
+                )
+            ).to.be.revertedWith("持续时间无效");
+        });
+
+        it("首次 ETH 出价无退款", async function () {
+            const bidder1InitialBalance = await ethers.provider.getBalance(bidder1.address);
+            await expect(
+                auction.connect(bidder1).bidETH({ value: ethers.parseEther("1") })
+            ).to.emit(auction, "NewBid").withArgs(bidder1.address, ethers.parseEther("1"), false);
+            const bidder1FinalBalance = await ethers.provider.getBalance(bidder1.address);
+            const bidAmount = BigInt(ethers.parseEther("1"));
+            const gasTolerance = BigInt(ethers.parseEther("0.1"));
+            expect(bidder1FinalBalance).to.be.below(bidder1InitialBalance - bidAmount + gasTolerance);
+        });
+
+        it("多次 ETH 出价触发退款", async function () {
+            const bidder1InitialBalance = await ethers.provider.getBalance(bidder1.address);
+            await auction.connect(bidder1).bidETH({ value: ethers.parseEther("1") });
+            const bidder1BalanceAfterFirstBid = await ethers.provider.getBalance(bidder1.address);
+            await auction.connect(bidder2).bidETH({ value: ethers.parseEther("2") });
+            const bidder1FinalBalance = await ethers.provider.getBalance(bidder1.address);
+            const expectedRefund = BigInt(ethers.parseEther("1"));
+            const gasTolerance = BigInt(ethers.parseEther("0.01"));
+            expect(bidder1FinalBalance).to.be.closeTo(bidder1InitialBalance - gasTolerance, ethers.parseEther("0.01")); // 覆盖行 92
         });
     });
 
@@ -172,7 +213,7 @@ describe("Auction Contract", function () {
             await expect(auction.endAuction())
                 .to.emit(auction, "AuctionEnded")
                 .withArgs(ethers.ZeroAddress, 0);
-            expect(await myNFT.ownerOf(0)).to.equal(seller.address); // 覆盖可能的转移逻辑
+            expect(await myNFT.ownerOf(0)).to.equal(seller.address);
         });
 
         it("ETH 出价后应正确结束拍卖", async function () {

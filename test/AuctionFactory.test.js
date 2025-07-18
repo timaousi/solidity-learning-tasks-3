@@ -102,7 +102,7 @@ describe("AuctionFactory Contract", function () {
                     priceFeed.getAddress(),
                     10000
                 )
-            ).to.be.revertedWith("Invalid fee percentage");
+            ).to.be.revertedWith("无效的手续费百分比 (最大 10%)");
         });
 
         it("应正确返回所有拍卖", async function () {
