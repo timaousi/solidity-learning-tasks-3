@@ -31,11 +31,15 @@ contract AuctionFactory is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         address priceFeed,
         uint256 feePercentage
     ) public returns (address) {
+        require(nftContract != address(0), unicode"无效的 NFT 合约地址");
+        require(erc20Token != address(0), unicode"无效的 ERC20 代币地址");
+        require(priceFeed != address(0), unicode"无效的价格预言机地址");
+        require(duration > 0, unicode"无效的拍卖持续时间");
+        require(feePercentage <= 10000, unicode"无效的手续费百分比");
         address auction = Clones.clone(auctionImplementation);
         Auction(auction).initialize(nftContract, tokenId, msg.sender, duration, erc20Token, priceFeed, feePercentage);
         auctions[auctionCount] = auction;
         auctionCount += 1;
-
         IERC721(nftContract).safeTransferFrom(msg.sender, auction, tokenId);
         emit AuctionDeployed(auction, nftContract, tokenId);
         return auction;
